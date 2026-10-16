@@ -12,9 +12,11 @@ async function open(q = '', opts = {}) {
   const p = await ctx.newPage();
   p.errors = []; p.reqs = [];
   p.on('pageerror', (e) => p.errors.push('PAGEERROR ' + e.message));
-  p.on('console', (m) => m.type() === 'error' && p.errors.push(m.text()));
-  p.on('request', (r) => p.reqs.push(r.url()));
-  p.on('requestfailed', (r) => p.errors.push('FAILED ' + r.url().slice(0, 90) + ' ' + (r.failure() || {}).errorText));
+  // только сама страница: чужие iframe (виджет карты с рекламой) не считаем
+  const own = (u) => !u || u.startsWith(new URL(BASE).origin) || u.startsWith('file:');
+  p.on('console', (m) => m.type() === 'error' && own(m.location().url) && p.errors.push(m.text()));
+  p.on('request', (r) => r.frame() === p.mainFrame() && p.reqs.push(r.url()));
+  p.on('requestfailed', (r) => r.frame() === p.mainFrame() && p.errors.push('FAILED ' + r.url().slice(0, 90) + ' ' + (r.failure() || {}).errorText));
   await p.addInitScript(() => { try { sessionStorage.setItem('tc-intro', '1'); } catch (e) {} });
   if (opts.block) await p.route(opts.block, (r) => r.abort());
   await p.goto(BASE + q, { waitUntil: 'load' });
@@ -53,22 +55,6 @@ for (let i = 0; i < 3; i++) {
 check('счётчик 03 / 03', (await text(p, '.breath-count')) === 'Цикл 03 / 03', await text(p, '.breath-count'));
 await p.waitForTimeout(2000);
 check('после трёх циклов — приглашение', await p.evaluate(() => !document.querySelector('.breath-done').hidden));
-
-// лайтбокс
-await go(p, '#place', 0);
-await p.evaluate(() => { document.getElementById('reel').scrollLeft = 0; });
-await p.waitForTimeout(300);
-const N = W < 700 ? 1 : 2, pad = (n) => ('0' + n).slice(-2);
-const [sx, sy] = await center(p, '.shot:nth-child(' + N + ') .shot-btn');
-await p.mouse.click(sx, sy); await p.waitForTimeout(1200);
-check('лайтбокс открыт', await p.evaluate(() => !document.getElementById('lb').hidden));
-check('счётчик ' + pad(N) + ' / 07', (await text(p, '.lb-count')) === pad(N) + ' / 07', await text(p, '.lb-count'));
-const lbr = await p.evaluate(() => { const r = document.querySelector('.lb-img').getBoundingClientRect(); return [r.width, r.height, document.querySelector('.lb-img').currentSrc]; });
-check('кадр развернулся на экран', lbr[0] > W * 0.4, JSON.stringify(lbr));
-await p.keyboard.press('ArrowRight'); await p.waitForTimeout(1500);
-check('стрелка → ' + pad(N + 1), (await text(p, '.lb-count')) === pad(N + 1) + ' / 07', await text(p, '.lb-count'));
-await p.keyboard.press('Escape'); await p.waitForTimeout(1200);
-check('Esc закрывает', await p.evaluate(() => document.getElementById('lb').hidden));
 
 // ссылки
 const links = await p.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')));
