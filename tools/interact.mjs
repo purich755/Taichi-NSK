@@ -114,6 +114,7 @@ const off = await open('', { block: /open-meteo|yandex\.ru\/map-widget/ });
 check('без погоды чип скрыт', await off.evaluate(() => [...document.querySelectorAll('[data-weather]')].every((e) => e.hidden)));
 const mapH = await off.evaluate(() => document.querySelector('.map-frame').getBoundingClientRect().height);
 check('рамка карты держит размер', mapH > 150, String(mapH));
+  check('карта — своя картинка, без iframe Яндекса', await off.evaluate(() => !document.querySelector('iframe') && !!document.querySelector('.map-frame img')));
 check('без сети — без ошибок страницы', !off.errors.some((e) => e.startsWith('PAGEERROR')), off.errors.join(' | '));
 await off.context().close();
 
